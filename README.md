@@ -4,6 +4,8 @@ A local tool that rerolls your **guest** roll on [rngdle.com](https://rngdle.com
 
 > Unofficial and not affiliated with RNGdle. It only touches guest rolls, which live in your own browser. It can't change account rolls or the leaderboard: those are rolled on RNGdle's server.
 
+![The dashboard after a session: the best roll, a Mythic 57,777, shown large in its rarity color, with session stats, the rarity spread and the live feed of rolls](docs/dashboard.png)
+
 ## How it works
 
 For players who aren't signed in, RNGdle rolls the number in the browser (`Math.random()`), scores it with the site's own badge rules, and saves it to `localStorage` as today's roll. Rerolling means clearing that saved roll and pressing **Generate** again. This tool does that for you, quickly, using the real site and its real button.
@@ -11,7 +13,7 @@ For players who aren't signed in, RNGdle rolls the number in the browser (`Math.
 ## Requirements
 
 - [Node.js](https://nodejs.org) 18 or newer (no packages to install)
-- A Chromium browser (Chrome, Edge, Brave, Arc). Firefox and Safari are untested; see [Limitations](#limitations).
+- A Chromium browser (Chrome, Edge, Brave, Arc) for full speed. Firefox works but much more slowly; Safari is untested. See [Limitations](#limitations).
 
 ## Dashboard
 
@@ -25,6 +27,8 @@ Then open **http://localhost:4321/__roller/**.
 - **Engines:** how many copies of the site roll in parallel. **Auto** starts with one and adds more while the rate keeps going up, so it finds the fastest count for your CPU. You can also pick a fixed number.
 - **Live feed:** every roll with its number, EP, rarity and percentile. Switch to **Rarest** to see your 100 best rolls of the session.
 - **Details:** click a roll to see every badge, its EP, and which badges didn't count. A badge doesn't count when a bigger one in the same family already did.
+
+![The Rarest feed with a roll's details open: each badge with its emoji, description, EP and rarity, and a button to use the roll on rngdle.com](docs/badges.png)
 
 Use a different port with `PORT=5000 npm start`.
 
@@ -52,7 +56,7 @@ Paste [`console/rngdle-roller.js`](console/rngdle-roller.js) into the DevTools c
 
 - **Guest rolls only, in one browser.** Nothing here reaches your account or the leaderboard, and a roll you apply won't show on your other devices.
 - **Keep the dashboard visible.** Browsers slow down tabs that aren't on screen, engines included. The dashboard shows a notice when this happens.
-- **Tested in Chrome on macOS only.** Safari may not resolve `*.localhost` hostnames, and Firefox hasn't been tried.
+- **Fastest in Chromium browsers.** On a 12-core Mac, Chrome reached about 90–100 rolls per second with 8–11 engines. Firefox works, but extra engines don't help there: Auto stays at 1 and rolls run at a few per second. Safari is untested and may not resolve `*.localhost` hostnames. Only tested on macOS.
 - **Breaks when the site changes.** It depends on RNGdle's **Generate** button label (`aria-label="Generate a new number"`), its `localStorage` key names and its built-in score table. If the site changes them, you'll see an error saying what's missing.
 
 ## License

@@ -110,11 +110,11 @@
   .side { display: grid; gap: 24px; align-content: start; }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px 24px; }
   .panel h2 { font: 700 20px/1.2 var(--display); margin: 0 0 12px; letter-spacing: .01em; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 12px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, auto)); justify-content: space-between; gap: 12px 20px; }
   .note { margin: 10px 0 0; font-size: 13px; color: var(--muted); min-height: 1.5em; }
   .goal select { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fff; font-weight: 600; }
   .stats div { font-size: 13px; color: var(--muted); }
-  .stats b { display: block; font: 700 30px/1.1 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stats b { display: block; font: 700 30px/1.1 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .meter { margin-top: 18px; }
   .meter .track { height: 10px; border-radius: 999px; background: var(--page); overflow: hidden; }
@@ -181,8 +181,8 @@
   .drawer .dnum { font: 900 72px/1 var(--display); margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
   .drawer .dsum { font-size: 15px; }
   .drawer .body { overflow: auto; padding: 8px 24px 24px; flex: 1; }
-  .badge { display: grid; grid-template-columns: 32px 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid #E1E6EE; }
-  .badge .emo { font-size: 22px; line-height: 1.2; }
+  .badge { display: grid; grid-template-columns: minmax(32px, auto) 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid #E1E6EE; }
+  .badge .emo { font-size: 22px; line-height: 1.2; white-space: nowrap; }
   .badge h3 { margin: 0; font-size: 15px; }
   .badge p { margin: 2px 0 0; color: var(--muted); font-size: 13px; grid-column: 2 / 4; }
   .badge .pts { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
