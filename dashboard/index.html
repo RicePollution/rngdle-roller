@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RNGdle Roller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;900&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #E9EDF3;
+    --surface: #F7F9FC;
+    --ink: #18203A;
+    --muted: #5B6582;
+    --line: #CBD3E1;
+    --action: #2741C8;
+    --action-ink: #FFFFFF;
+    --stop: #B42318;
+    --radius-lg: 18px;
+    --radius-sm: 8px;
+    --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+    --ui: 'Instrument Sans', system-ui, sans-serif;
+
+    /* Rarity colors, taken from rngdle.com itself */
+    --trash-bg: #C8A87C;   --trash-ink: #5C3310;
+    --common-bg: #E5E7EB;  --common-ink: #1F2937;
+    --uncommon-bg: #D1FAE5;--uncommon-ink: #065F46;
+    --rare-bg: #DBEAFE;    --rare-ink: #1E40AF;
+    --epic-bg: #EDE9FE;    --epic-ink: #6B21A8;
+    --anomaly-bg: #FED7AA; --anomaly-ink: #9A3412;
+    --mythic-bg: #FECACA;  --mythic-ink: #991B1B;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.5 var(--ui);
+    min-height: 100vh;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--action); outline-offset: 2px; }
+
+  /* ---------- Controls ---------- */
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .brand { font: 700 22px/1 var(--display); letter-spacing: .01em; margin-right: auto; }
+  .brand small { font: 500 13px var(--ui); color: var(--muted); margin-left: 8px; letter-spacing: 0; }
+  .goal { display: flex; align-items: center; gap: 8px; }
+  .goal input {
+    width: 84px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: #fff; font-variant-numeric: tabular-nums; font-weight: 600;
+  }
+  .goal .need { color: var(--muted); font-size: 13px; min-width: 150px; }
+  .go {
+    min-width: 128px; padding: 10px 20px; border: 0; border-radius: 999px;
+    background: var(--action); color: var(--action-ink); font-weight: 700; cursor: pointer;
+    transition: transform .12s ease, background-color .2s ease;
+  }
+  .go:active { transform: scale(.97); }
+  .go[data-running="true"] { background: var(--stop); }
+  .go:disabled { opacity: .5; cursor: progress; }
+
+  .bg-note { padding: 10px 24px; background: var(--anomaly-bg); color: var(--anomaly-ink); font-weight: 600; font-size: 14px; }
+  .bg-note[hidden] { display: none; }
+
+  /* ---------- Layout ---------- */
+  main {
+    display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+    gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } .bar { padding: 12px 16px; } }
+
+  /* ---------- Current roll (the one loud element) ---------- */
+  .board {
+    border-radius: var(--radius-lg);
+    background: var(--tier-bg, var(--surface));
+    color: var(--tier-ink, var(--ink));
+    padding: 28px 32px 32px;
+    transition: background-color .25s ease, color .25s ease;
+    position: relative; overflow: hidden;
+  }
+  .board .tier-name { font-weight: 600; font-size: 15px; min-height: 1.5em; }
+  .big {
+    font: 900 clamp(88px, 15vw, 196px)/.9 var(--display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+    margin: 8px 0 16px;
+    word-break: break-all;
+  }
+  .board.hit .big { animation: land .5s cubic-bezier(.2, 1.4, .4, 1); }
+  @keyframes land { from { transform: scale(.92); } to { transform: scale(1); } }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 17px; }
+  .facts b { font: 700 26px/1 var(--display); display: block; }
+  .facts span { opacity: .75; font-size: 13px; }
+  .banner {
+    margin-top: 20px; padding: 14px 16px; border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, .6); color: var(--ink);
+    display: none; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .banner.show { display: flex; }
+  .banner p { margin: 0; flex: 1 1 260px; }
+
+  .side { display: grid; gap: 24px; align-content: start; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px 24px; }
+  .panel h2 { font: 700 20px/1.2 var(--display); margin: 0 0 12px; letter-spacing: .01em; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 12px; }
+  .note { margin: 10px 0 0; font-size: 13px; color: var(--muted); min-height: 1.5em; }
+  .goal select { padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fff; font-weight: 600; }
+  .stats div { font-size: 13px; color: var(--muted); }
+  .stats b { display: block; font: 700 30px/1.1 var(--display); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .meter { margin-top: 18px; }
+  .meter .track { height: 10px; border-radius: 999px; background: var(--page); overflow: hidden; }
+  .meter .fill { height: 100%; width: 0; background: var(--action); border-radius: 999px; transition: width .3s ease; }
+  .meter p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+  .tally { display: flex; height: 34px; border-radius: var(--radius-sm); overflow: hidden; background: var(--page); }
+  .tally i { display: block; height: 100%; transition: flex-grow .3s ease; flex: 0 0 0; min-width: 0; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px 12px; margin-top: 12px; font-size: 13px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend em { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Feed ---------- */
+  .feed-panel { grid-column: 1 / -1; padding-bottom: 8px; }
+  .feed-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 12px; }
+  .feed-head h2 { margin: 0; }
+  .feed-head p { margin: 0; color: var(--muted); font-size: 13px; flex: 1 1 200px; }
+  .seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--page); align-self: center; }
+  .seg button {
+    border: 0; background: transparent; padding: 6px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(24, 32, 58, .15); }
+  .feed { list-style: none; margin: 0; padding: 0; height: 52vh; overflow: auto; contain: strict; }
+  .feed li { content-visibility: auto; contain-intrinsic-size: auto 44px; }
+  .row {
+    width: 100%; display: grid; align-items: center; gap: 12px;
+    grid-template-columns: 56px minmax(110px, 1.2fr) 1fr 110px 1fr;
+    padding: 9px 10px; border: 0; border-radius: var(--radius-sm);
+    background: transparent; text-align: left; cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  .row:hover { background: var(--page); }
+  .row[aria-current="true"] { background: #DDE3EE; }
+  .row .n { color: var(--muted); font-size: 13px; }
+  .row .num { font: 700 22px/1 var(--display); }
+  .row .ep { font-weight: 600; }
+  .row .top { color: var(--muted); text-align: right; }
+  .row.goal-hit .top { color: var(--ink); font-weight: 700; }
+  .pill { justify-self: start; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .feed li + li { border-top: 1px solid #E1E6EE; }
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 40px 1fr auto; }
+    .row .ep, .row .top { display: none; }
+  }
+  .empty { color: var(--muted); padding: 24px 4px; }
+
+  /* ---------- Detail drawer ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(24, 32, 58, .35); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(460px, 100%);
+    background: var(--surface); box-shadow: -12px 0 40px rgba(24, 32, 58, .18);
+    transform: translateX(100%); transition: transform .28s cubic-bezier(.2, .8, .2, 1);
+    display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: none; }
+  .drawer header { padding: 24px; background: var(--tier-bg); color: var(--tier-ink); }
+  .drawer header .close {
+    float: right; border: 0; background: rgba(255, 255, 255, .55); border-radius: 999px;
+    width: 34px; height: 34px; cursor: pointer; font-size: 18px; line-height: 1;
+  }
+  .drawer .dnum { font: 900 72px/1 var(--display); margin: 4px 0 8px; font-variant-numeric: tabular-nums; }
+  .drawer .dsum { font-size: 15px; }
+  .drawer .body { overflow: auto; padding: 8px 24px 24px; flex: 1; }
+  .badge { display: grid; grid-template-columns: 32px 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid #E1E6EE; }
+  .badge .emo { font-size: 22px; line-height: 1.2; }
+  .badge h3 { margin: 0; font-size: 15px; }
+  .badge p { margin: 2px 0 0; color: var(--muted); font-size: 13px; grid-column: 2 / 4; }
+  .badge .pts { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .badge .pts small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+  .badge.unscored h3, .badge.unscored .pts { color: var(--muted); }
+  .badge.unscored .pts { text-decoration: line-through; }
+  .drawer footer { padding: 16px 24px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+  .drawer footer p { margin: 0; font-size: 13px; color: var(--muted); }
+  .secondary {
+    padding: 10px 16px; border-radius: 999px; border: 1px solid var(--ink); background: transparent;
+    font-weight: 600; cursor: pointer;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0;
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px;
+    transition: opacity .2s ease, transform .2s ease; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+  /* Engines stay inside the viewport (invisible, behind everything): Chrome slows timers to
+     once a second in cross-origin frames it considers off-screen. */
+  #engines { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: -1; opacity: 0; pointer-events: none; }
+  iframe.engine { position: absolute; left: 0; top: 0; width: 400px; height: 720px; border: 0; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div class="brand">RNGdle roller <small>rerolls guest rolls on rngdle.com</small></div>
+    <label class="goal">Stop at top
+      <input id="goal" type="number" min="0.0001" max="100" step="any" value="5" aria-describedby="need">%
+      <span class="need" id="need">Loading the site's score table…</span>
+    </label>
+    <label class="goal">Engines
+      <select id="enginePick" aria-describedby="engineNote"><option value="auto" selected>Auto</option></select>
+    </label>
+    <button class="go" id="go" disabled data-running="false">Start rolling</button>
+  </div>
+
+  <div class="bg-note" id="bgNote" role="status" hidden>
+    Rolling slowly: your browser slows down tabs that aren't on screen. Keep this tab visible for full speed.
+  </div>
+
+  <main>
+    <section class="board" id="board" aria-live="polite">
+      <div class="tier-name" id="tierName">Press Start rolling to begin</div>
+      <div class="big" id="big">–</div>
+      <div class="facts">
+        <div><b id="curEp">–</b><span>EP</span></div>
+        <div><b id="curTop">–</b><span>percentile</span></div>
+        <div><b id="curBadges">–</b><span>badges</span></div>
+      </div>
+      <div class="banner" id="banner">
+        <p id="bannerText"></p>
+        <button class="secondary" id="bannerUse">Use on rngdle.com</button>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="panel">
+        <h2>This session</h2>
+        <div class="stats">
+          <div><b id="sRolls">0</b>rolls</div>
+          <div><b id="sRate">0.0</b>rolls per second</div>
+          <div><b id="sBest">–</b>best percentile</div>
+          <div><b id="sEngines">–</b>engines</div>
+        </div>
+        <p class="note" id="engineNote"></p>
+        <div class="meter">
+          <div class="track"><div class="fill" id="meterFill"></div></div>
+          <p id="meterText">Best roll so far against your goal</p>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Rarity spread</h2>
+        <div class="tally" id="tally" role="img" aria-label="Count of rolls by rarity"></div>
+        <div class="legend" id="legend"></div>
+      </section>
+    </div>
+
+    <section class="panel feed-panel">
+      <div class="feed-head">
+        <h2>Live feed</h2>
+        <p id="feedHint">Newest first. Select a roll to see its badges.</p>
+        <div class="seg" role="group" aria-label="Sort feed">
+          <button id="sortNew" aria-pressed="true">Newest</button>
+          <button id="sortTop" aria-pressed="false">Rarest</button>
+        </div>
+      </div>
+      <ul class="feed" id="feed"><li class="empty">Rolls will appear here as they come in.</li></ul>
+    </section>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dnum" aria-hidden="true">
+    <header>
+      <button class="close" id="dclose" aria-label="Close">×</button>
+      <div id="dtier"></div>
+      <div class="dnum" id="dnum"></div>
+      <div class="dsum" id="dsum"></div>
+    </header>
+    <div class="body" id="dbody"></div>
+    <footer>
+      <button class="secondary" id="duse">Use this roll on rngdle.com</button>
+      <p>Copies a one-line snippet. Paste it into the DevTools console on rngdle.com (signed out) and the site will show this roll as today's.</p>
+    </footer>
+  </aside>
+  <div class="toast" id="toast" role="status"></div>
+  <div id="engines" aria-hidden="true"></div>
+
+<script>
+(() => {
+  const K_DATE = 'rngdle_guest_roll_date', K_DATA = 'rngdle_guest_roll_data', K_CLAIM = 'rngdle_guest_claim_token';
+  const BTN = 'button[aria-label="Generate a new number"]';
+  const TIERS = ['trash', 'common', 'uncommon', 'rare', 'epic', 'anomaly', 'mythic'];
+  const TIER_LABEL = { trash: 'Trash', common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', anomaly: 'Anomaly', mythic: 'Mythic' };
+  const FEED_LIMIT = 150;
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const fmt = (n) => n.toLocaleString('en-US');
+
+  // ---------- Site tables ----------
+  let pTable = null; // { obj, keys }
+  async function loadPercentiles() {
+    const html = await fetch('/').then((r) => r.text());
+    const srcs = [...new Set([...html.matchAll(/\/_next\/static\/chunks\/[\w-]+\.js/g)].map((m) => m[0]))];
+    const marker = '"SCORE_PERCENTILES",0,{';
+    for (const s of srcs) {
+      const src = await fetch(s).then((r) => r.text()).catch(() => '');
+      const i = src.indexOf(marker);
+      if (i < 0) continue;
+      const start = i + marker.length - 1;
+      const literal = src.slice(start, src.indexOf('}', start) + 1);
+      if (!/^\{[0-9a-fx:.,+\-]*\}$/.test(literal)) continue; // numeric literals only (incl. hex keys)
+      const obj = new Function('return ' + literal)();
+      return { obj, keys: Object.keys(obj).map(Number).sort((a, b) => a - b) };
+    }
+    return null;
+  }
+  const FALLBACK = [[50, 5802], [25, 10074], [10, 22293], [5, 35469], [1, 162292], [0.1, 1054023]];
+  function percentileFor(score) {
+    if (!pTable) return null;
+    const { obj, keys } = pTable;
+    let lo = 0, hi = keys.length - 1, best = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (keys[m] <= score) { best = m; lo = m + 1; } else hi = m - 1; }
+    return best < 0 ? 0 : obj[keys[best]];
+  }
+  function thresholdFor(top) {
+    const need = 100 - top;
+    if (pTable) return pTable.keys.find((k) => pTable.obj[k] >= need) ?? Infinity;
+    const f = FALLBACK.filter(([t]) => t <= top).sort((a, b) => b[0] - a[0])[0];
+    return (f || FALLBACK[FALLBACK.length - 1])[1];
+  }
+  function tierFor(p) { // same cut-offs the site uses for card rarity
+    if (p == null) return 'common';
+    return p < 1 ? 'trash' : p < 50 ? 'common' : p < 75 ? 'uncommon' : p < 90 ? 'rare' : p < 95 ? 'epic' : p < 99 ? 'anomaly' : 'mythic';
+  }
+  function badgeTier(score) {
+    return score < 1e3 ? 'common' : score < 1e4 ? 'uncommon' : score < 1e5 ? 'rare' : score < 1e6 ? 'epic' : score < 1e7 ? 'anomaly' : 'mythic';
+  }
+  function topLabel(p) {
+    if (p == null) return '?';
+    const t = 100 - p;
+    return p >= 50 ? `Top ${+t.toPrecision(3)}%` : `Bottom ${+p.toPrecision(3)}%`;
+  }
+  const tierVars = (el, tier) => { el.style.setProperty('--tier-bg', `var(--${tier}-bg)`); el.style.setProperty('--tier-ink', `var(--${tier}-ink)`); };
+
+  // ---------- State ----------
+  let goal = 5, threshold = 35469;
+  let running = false, rolls = 0, startedAt = 0, best = null, selected = null;
+  const counts = Object.fromEntries(TIERS.map((t) => [t, 0]));
+
+  function setGoal(v) {
+    if (!(v > 0 && v <= 100)) return;
+    goal = v; threshold = thresholdFor(goal);
+    $('need').textContent = `Needs ${fmt(threshold)} EP or more${pTable ? '' : ' (built-in table)'}`;
+    renderMeter();
+  }
+  $('goal').addEventListener('input', (e) => setGoal(parseFloat(e.target.value)));
+  $('goal').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !running) toggle(); });
+
+  // ---------- Rendering ----------
+  const legend = $('legend'), tally = $('tally');
+  for (const t of TIERS) {
+    const seg = document.createElement('i'); seg.style.background = `var(--${t}-bg)`; seg.dataset.t = t; tally.appendChild(seg);
+    const s = document.createElement('span');
+    const sw = document.createElement('em'); sw.style.background = `var(--${t}-bg)`; sw.style.outline = `1px solid var(--${t}-ink)`;
+    const lb = document.createElement('i'); lb.textContent = TIER_LABEL[t]; lb.style.fontStyle = 'normal';
+    const c = document.createElement('b'); c.id = 'c-' + t; c.textContent = '0';
+    s.append(sw, lb, c); legend.appendChild(s);
+  }
+  function renderTally() {
+    for (const t of TIERS) {
+      tally.querySelector(`[data-t="${t}"]`).style.flexGrow = counts[t];
+      $('c-' + t).textContent = fmt(counts[t]);
+    }
+  }
+  function renderMeter() {
+    if (!best) { $('meterFill').style.width = '0'; $('meterText').textContent = `Best roll so far against your goal of ${fmt(threshold)} EP`; return; }
+    const pct = Math.min(1, Math.log10(best.score + 1) / Math.log10(threshold + 1));
+    $('meterFill').style.width = (pct * 100).toFixed(1) + '%';
+    $('meterText').textContent = best.score >= threshold
+      ? `Goal reached with ${fmt(best.score)} EP`
+      : `Best is ${fmt(best.score)} of ${fmt(threshold)} EP needed`;
+  }
+  function renderBoard(r, isHit) {
+    const board = $('board');
+    tierVars(board, r.tier);
+    $('tierName').textContent = TIER_LABEL[r.tier];
+    $('big').textContent = fmt(r.number);
+    $('curEp').textContent = fmt(r.score);
+    $('curTop').textContent = topLabel(r.p);
+    $('curBadges').textContent = r.badges.length;
+    board.classList.toggle('hit', !!isHit);
+  }
+  function rowFor(r) {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.className = 'row' + (r.score >= threshold ? ' goal-hit' : '');
+    b.dataset.i = r.i;
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = '#' + r.i;
+    const num = document.createElement('span'); num.className = 'num'; num.textContent = fmt(r.number);
+    const ep = document.createElement('span'); ep.className = 'ep'; ep.textContent = fmt(r.score) + ' EP';
+    const pill = document.createElement('span'); pill.className = 'pill'; pill.textContent = TIER_LABEL[r.tier];
+    pill.style.background = `var(--${r.tier}-bg)`; pill.style.color = `var(--${r.tier}-ink)`;
+    const top = document.createElement('span'); top.className = 'top'; top.textContent = topLabel(r.p);
+    b.append(n, num, ep, pill, top);
+    b.addEventListener('click', () => openDrawer(r));
+    li.appendChild(b);
+    return li;
+  }
+  // Two views: the newest FEED_LIMIT rolls, or the TOP_LIMIT highest-EP rolls of the session.
+  const TOP_LIMIT = 100;
+  const latest = [], topRolls = [];
+  let sortMode = 'new', topDirty = false, topPaintTimer = null;
+  function addToFeed(r) {
+    latest.unshift(r); if (latest.length > FEED_LIMIT) latest.pop();
+    if (topRolls.length < TOP_LIMIT || r.score > topRolls[topRolls.length - 1].score) {
+      let i = topRolls.findIndex((x) => r.score > x.score);
+      topRolls.splice(i < 0 ? topRolls.length : i, 0, r);
+      if (topRolls.length > TOP_LIMIT) topRolls.pop();
+      topDirty = true;
+    }
+    if (sortMode === 'new') {
+      pending.push(r);
+      if (!flushTimer) flushTimer = setTimeout(flushNew, 200);
+    } else if (topDirty) scheduleTop();
+  }
+  // The Rarest list re-sorts as better rolls arrive, but never while the pointer is over the
+  // feed, so a row can't move out from under a click.
+  let feedHover = false;
+  function scheduleTop() {
+    if (topPaintTimer) return;
+    topPaintTimer = setTimeout(() => {
+      topPaintTimer = null;
+      if (sortMode !== 'top') return;
+      if (feedHover) return scheduleTop();
+      renderFeed();
+    }, 500);
+  }
+  $('feed').addEventListener('pointerenter', () => { feedHover = true; });
+  $('feed').addEventListener('pointerleave', () => { feedHover = false; if (topDirty && sortMode === 'top') scheduleTop(); });
+  // New rows are added in one batch at most 5 times a second, so a fast run doesn't
+  // spend its time re-laying-out the list.
+  let pending = [], flushTimer = null;
+  function flushNew() {
+    flushTimer = null;
+    if (sortMode !== 'new' || !pending.length) { pending = []; return; }
+    const feed = $('feed');
+    if (feed.firstElementChild?.classList.contains('empty')) feed.textContent = '';
+    const frag = document.createDocumentFragment();
+    for (let k = pending.length - 1, n = 0; k >= 0 && n < FEED_LIMIT; k--, n++) frag.appendChild(rowFor(pending[k]));
+    pending = [];
+    feed.prepend(frag);
+    while (feed.children.length > FEED_LIMIT) feed.lastElementChild.remove();
+  }
+  function renderFeed() {
+    const feed = $('feed');
+    const list = sortMode === 'new' ? latest : topRolls;
+    topDirty = false;
+    if (!list.length) {
+      feed.textContent = '';
+      const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Rolls will appear here as they come in.';
+      return feed.appendChild(li);
+    }
+    // Reuse rows that are already on screen so re-sorting moves them instead of replacing them.
+    const existing = new Map();
+    for (const li of feed.children) { const i = li.firstElementChild?.dataset.i; if (i) existing.set(i, li); }
+    const frag = document.createDocumentFragment();
+    for (const r of list) frag.appendChild(existing.get(String(r.i)) || rowFor(r));
+    feed.textContent = '';
+    feed.appendChild(frag);
+    if (selected) document.querySelector(`.row[data-i="${selected.i}"]`)?.setAttribute('aria-current', 'true');
+  }
+  function setSort(mode) {
+    sortMode = mode; pending = [];
+    $('sortNew').setAttribute('aria-pressed', String(mode === 'new'));
+    $('sortTop').setAttribute('aria-pressed', String(mode === 'top'));
+    $('feedHint').textContent = mode === 'new'
+      ? 'Newest first. Select a roll to see its badges.'
+      : `Your ${TOP_LIMIT} highest-EP rolls this session. Select one to see its badges.`;
+    $('feed').scrollTop = 0;
+    renderFeed();
+  }
+  $('sortNew').onclick = () => setSort('new');
+  $('sortTop').onclick = () => setSort('top');
+  function renderStats() {
+    $('sRolls').textContent = fmt(rolls);
+    if (running && recent.length > 1) {
+      const span = (recent[recent.length - 1] - recent[0]) / 1000;
+      $('sRate').textContent = ((recent.length - 1) / span).toFixed(1);
+    }
+    $('sBest').textContent = best ? topLabel(best.p) : '–';
+  }
+
+  // ---------- Drawer ----------
+  let lastFocus = null;
+  function openDrawer(r) {
+    selected = r; lastFocus = document.activeElement;
+    document.querySelectorAll('.row[aria-current]').forEach((e) => e.removeAttribute('aria-current'));
+    document.querySelector(`.row[data-i="${r.i}"]`)?.setAttribute('aria-current', 'true');
+    const d = $('drawer');
+    tierVars(d.querySelector('header'), r.tier);
+    $('dtier').textContent = `${TIER_LABEL[r.tier]}, roll #${r.i}`;
+    $('dnum').textContent = fmt(r.number);
+    $('dsum').textContent = `${fmt(r.score)} EP, ${topLabel(r.p)}`;
+    const body = $('dbody'); body.textContent = '';
+    const sorted = [...r.badges].sort((a, b) => (b.isScoring - a.isScoring) || (b.score - a.score));
+    for (const bd of sorted) {
+      const row = document.createElement('div'); row.className = 'badge' + (bd.isScoring === false ? ' unscored' : '');
+      const emo = document.createElement('div'); emo.className = 'emo'; emo.textContent = bd.emoji || '✨';
+      const h = document.createElement('h3'); h.textContent = bd.label;
+      const pts = document.createElement('div'); pts.className = 'pts'; pts.textContent = '+' + fmt(bd.score);
+      const sm = document.createElement('small');
+      sm.textContent = bd.isScoring === false ? 'not counted, a bigger badge in its family won' : TIER_LABEL[badgeTier(bd.score)];
+      pts.appendChild(sm);
+      const p = document.createElement('p'); p.textContent = bd.description || '';
+      row.append(emo, h, pts, p); body.appendChild(row);
+    }
+    d.classList.add('open'); d.setAttribute('aria-hidden', 'false'); $('scrim').classList.add('open');
+    $('dclose').focus();
+  }
+  function closeDrawer() {
+    $('drawer').classList.remove('open'); $('drawer').setAttribute('aria-hidden', 'true'); $('scrim').classList.remove('open');
+    lastFocus?.focus?.();
+  }
+  $('dclose').onclick = closeDrawer; $('scrim').onclick = closeDrawer;
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('drawer').classList.contains('open')) closeDrawer(); });
+
+  // ---------- Hand a roll to the real rngdle.com ----------
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600); }
+  async function useOnSite(r) {
+    const snippet = `localStorage.setItem(${JSON.stringify(K_DATE)},${JSON.stringify(r.date)});` +
+      `localStorage.setItem(${JSON.stringify(K_DATA)},${JSON.stringify(r.raw)});localStorage.removeItem(${JSON.stringify(K_CLAIM)});location.reload();`;
+    try { await navigator.clipboard.writeText(snippet); toast('Snippet copied. Paste it into the console on rngdle.com.'); }
+    catch { prompt('Copy this and paste it into the console on rngdle.com:', snippet); }
+    window.open('https://rngdle.com/', '_blank', 'noopener');
+  }
+  $('duse').onclick = () => selected && useOnSite(selected);
+  $('bannerUse').onclick = () => best && useOnSite(best);
+
+  // ---------- Engines ----------
+  // Each engine is a hidden iframe running the real site on its own eNgM.localhost hostname, so it
+  // has its own saved roll and, as a separate site, its own browser process (its own CPU core).
+  // A script the server injects there clicks Generate and posts each roll back here.
+  // Every RECYCLE_EVERY rolls an engine flips between its two hostnames (g0 <-> g1). That retires
+  // the old page's process entirely, so memory the site leaks per page load can't build up.
+  const RECYCLE_EVERY = 40;
+  const CORES = Math.max(1, navigator.hardwareConcurrency || 4);
+  const MAX_ENGINES = Math.max(1, Math.min(16, CORES - 1));
+  const engines = new Map(); // origin -> engine
+  const freeIds = [];
+  let nextId = 0, alive = 0, allStopped = null;
+  let hit = null, runError = null, lastPaint = 0;
+  let sessionRolls = 0;
+  const recent = []; // timestamps of the last 60 rolls, for the live rate
+
+  const originOf = (e) => `${location.protocol}//e${e.id}g${e.gen}.localhost:${location.port}`;
+  const engineUrl = (e) => `${originOf(e)}/?_engine=1&_p=${encodeURIComponent(location.origin)}&_r=${Date.now()}`;
+
+  window.addEventListener('message', (ev) => {
+    const e = engines.get(ev.origin);
+    if (!e || !e.frame || ev.source !== e.frame.contentWindow || !ev.data?.rr || !e.waiter) return;
+    const w = e.waiter; e.waiter = null; w(ev.data);
+  });
+
+  function newFrame(e) {
+    if (e.frame) { engines.delete(originOf(e)); e.frame.remove(); e.gen ^= 1; }
+    const f = document.createElement('iframe');
+    f.className = 'engine'; f.title = 'rngdle engine'; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
+    e.frame = f; e.uses = 0;
+    engines.set(originOf(e), e);
+    $('engines').appendChild(f);
+    f.src = engineUrl(e);
+  }
+  function nextRoll(e) {
+    return new Promise((res, rej) => {
+      const to = setTimeout(() => { e.waiter = null; rej(new Error('rngdle.com took too long to respond. Check your connection and start again.')); }, 15000);
+      e.waiter = (d) => {
+        clearTimeout(to);
+        if (d.rr === 'error') rej(new Error(d.message)); else res(d.rr === 'roll' ? d : null);
+      };
+      if (!e.frame || e.uses >= RECYCLE_EVERY) newFrame(e);
+      else e.frame.contentWindow.postMessage({ rr: 'again' }, originOf(e));
+      e.uses++;
+    });
+  }
+  function record(raw, date) {
+    const d = JSON.parse(raw);
+    const p = percentileFor(d.totalScore);
+    const r = { i: ++rolls, number: d.number, score: d.totalScore, badges: d.badges || [], p, tier: tierFor(p), raw, date };
+    counts[r.tier]++;
+    recent.push(performance.now()); if (recent.length > 60) recent.shift();
+    if (!best || r.score > best.score) best = r;
+    return r;
+  }
+
+  async function engineLoop(e) {
+    try {
+      while (running && !e.retire) {
+        const d = await nextRoll(e);
+        if (!d || !running) break;
+        const r = record(d.raw, d.date);
+        sessionRolls++;
+        addToFeed(r);
+        if (r.score >= threshold) { hit = hit || r; stopAll(); break; }
+        const now = performance.now();
+        if (now - lastPaint > 80) { renderBoard(r); renderTally(); renderStats(); renderMeter(); lastPaint = now; }
+      }
+    } catch (err) {
+      if (running) { runError = err; stopAll(); }
+    } finally {
+      if (e.frame) { engines.delete(originOf(e)); e.frame.remove(); e.frame = null; }
+      freeIds.push(e.id); freeIds.sort((a, b) => a - b);
+      alive--;
+      renderEngines();
+      if (!running && alive === 0 && allStopped) allStopped();
+    }
+  }
+  let pool = []; // engines that are running and not retiring
+  function setEngineCount(n) {
+    n = Math.max(1, Math.min(MAX_ENGINES, n));
+    pool = pool.filter((e) => !e.retire);
+    while (pool.length < n) {
+      const e = { id: freeIds.length ? freeIds.shift() : nextId++, gen: 0, frame: null, uses: 0, waiter: null, retire: false };
+      pool.push(e); alive++;
+      engineLoop(e);
+    }
+    while (pool.length > n) { const e = pool.pop(); e.retire = true; }
+    renderEngines();
+  }
+  function stopAll() {
+    running = false;
+    for (const e of new Set(engines.values())) if (e.waiter) { const w = e.waiter; e.waiter = null; w({ rr: 'stopped' }); }
+  }
+
+  // ---------- Engine count: auto-tuned or fixed ----------
+  // Auto starts with one engine and adds another while total rolls per second keeps rising
+  // by at least 6%. When an extra engine stops paying off, it steps back to the best count.
+  let engineMode = 'auto', tuneState = '';
+  const picker = $('enginePick');
+  for (let n = 1; n <= MAX_ENGINES; n++) {
+    const o = document.createElement('option'); o.value = String(n); o.textContent = String(n); picker.appendChild(o);
+  }
+  picker.addEventListener('change', () => {
+    engineMode = picker.value;
+    if (!running) return renderEngines();
+    if (engineMode === 'auto') autoTune(); else { tuneToken++; tuneState = ''; setEngineCount(+engineMode); }
+  });
+  function renderEngines() {
+    const n = pool.filter((e) => !e.retire).length;
+    $('sEngines').textContent = running ? String(n) : '–';
+    $('engineNote').textContent = engineMode === 'auto'
+      ? (running ? tuneState : `Finds the fastest count for this computer (up to ${MAX_ENGINES})`)
+      : `Fixed at ${engineMode}`;
+  }
+  let tuneToken = 0;
+  async function measure(ms) {
+    const c0 = sessionRolls, t0 = performance.now();
+    await sleep(ms);
+    return (sessionRolls - c0) / ((performance.now() - t0) / 1000);
+  }
+  async function autoTune() {
+    const token = ++tuneToken;
+    let n = 1, bestRate = 0, bestN = 1;
+    setEngineCount(n);
+    tuneState = 'Tuning: trying 1 engine'; renderEngines();
+    while (running && token === tuneToken) {
+      await sleep(1500); // let new engines warm up
+      if (!running || token !== tuneToken) return;
+      const rate = await measure(3500);
+      if (!running || token !== tuneToken) return;
+      if (rate > bestRate * 1.06 && n < MAX_ENGINES) {
+        bestRate = rate; bestN = n; n++;
+        setEngineCount(n);
+        tuneState = `Tuning: trying ${n} engines (${bestRate.toFixed(1)}/s with ${bestN})`; renderEngines();
+      } else {
+        if (rate > bestRate) { bestRate = rate; bestN = n; }
+        setEngineCount(bestN);
+        tuneState = `Tuned: ${bestN} engine${bestN > 1 ? 's' : ''} is fastest here`; renderEngines();
+        return;
+      }
+    }
+  }
+
+  async function run() {
+    running = true; sessionRolls = 0; startedAt = performance.now(); recent.length = 0;
+    hit = null; runError = null; lastPaint = 0; document.title = 'RNGdle Roller';
+    $('go').dataset.running = 'true'; $('go').textContent = 'Stop';
+    $('banner').classList.remove('show');
+    const done = new Promise((r) => { allStopped = r; });
+    wasHidden = document.hidden; updateBgNote();
+    if (engineMode === 'auto') autoTune(); else setEngineCount(+engineMode);
+    await done;
+    updateBgNote();
+    allStopped = null; pool = []; tuneToken++;
+    performance.clearResourceTimings();
+    $('go').dataset.running = 'false'; $('go').textContent = 'Start rolling';
+    renderTally(); renderStats(); renderMeter(); renderEngines();
+    const shown = hit || best;
+    if (shown) renderBoard(shown, !!hit);
+    if (runError) {
+      $('tierName').textContent = runError.message;
+    } else if (hit) {
+      $('bannerText').textContent = `Reached ${topLabel(hit.p)} on roll ${fmt(rolls)}. Put it on rngdle.com to make it today's roll.`;
+      $('banner').classList.add('show');
+      document.title = `${topLabel(hit.p)} · RNGdle Roller`;
+    } else if (best) {
+      $('bannerText').textContent = `Stopped. Your best this session is ${fmt(best.number)} at ${topLabel(best.p)}.`;
+      $('banner').classList.add('show');
+    }
+  }
+  // Browsers throttle hidden tabs (and every engine inside them). Say so instead of looking broken.
+  // A run measured while hidden would also mislead the auto-tuner, so it re-tunes when you return.
+  let wasHidden = false;
+  function updateBgNote() {
+    $('bgNote').hidden = !(running && document.hidden);
+    if (document.hidden) wasHidden = true;
+    else if (wasHidden && running && engineMode === 'auto') { wasHidden = false; autoTune(); }
+  }
+  document.addEventListener('visibilitychange', updateBgNote);
+  function toggle() { if (running) stopAll(); else run(); }
+  $('go').onclick = toggle;
+
+  // ---------- Boot ----------
+  (async () => {
+    // Remove the site's service worker if it got installed on this origin; it slows every reroll.
+    try {
+      for (const reg of await navigator.serviceWorker?.getRegistrations?.() ?? []) await reg.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+    } catch {}
+    try { pTable = await loadPercentiles(); } catch { pTable = null; }
+    setGoal(parseFloat($('goal').value));
+    renderEngines();
+    $('go').disabled = false;
+  })();
+})();
+</script>
+</body>
+</html>
